@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import { useEffect, useState, FormEvent } from 'react';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface Post {
     id: string;
@@ -24,6 +25,7 @@ interface FormErrors {
 }
 
 export default function Index() {
+    const { tokens: t } = useTheme();
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
@@ -98,21 +100,21 @@ export default function Index() {
 
     const inputStyle = (hasError?: string) => ({
         width: '100%', padding: '10px 14px', borderRadius: '8px', boxSizing: 'border-box' as const,
-        background: 'rgba(255,255,255,0.06)',
-        border: hasError ? '1px solid #f87171' : '1px solid rgba(255,255,255,0.1)',
-        color: '#e2e8f0', fontSize: '13px', outline: 'none',
+        background: t.inputBg,
+        border: `1px solid ${hasError ? t.danger : t.inputBorder}`,
+        color: t.text, fontSize: '13px', outline: 'none',
     });
 
     return (
-        <AuthenticatedLayout header={<span style={{ fontSize: '14px', color: '#64748b' }}>Home / Posts</span>}>
+        <AuthenticatedLayout header={<span style={{ fontSize: '14px', color: t.textMuted }}>Home / Posts</span>}>
             <Head title="Posts" />
 
             {/* Page heading */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
                 <div>
-                    <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Posts</h1>
-                    <p style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>
-                        API: <code style={{ color: '#a78bfa' }}>/api/posts</code> · MongoDB collection · {posts.length} document{posts.length !== 1 ? 's' : ''}
+                    <h1 style={{ fontSize: '22px', fontWeight: 700, color: t.text, margin: 0 }}>Posts</h1>
+                    <p style={{ color: t.textMuted, fontSize: '13px', marginTop: '4px' }}>
+                        API: <code style={{ color: t.accent }}>/api/posts</code> · MongoDB collection · {posts.length} document{posts.length !== 1 ? 's' : ''}
                     </p>
                 </div>
                 <button
@@ -130,29 +132,24 @@ export default function Index() {
 
             {/* Flash message */}
             {flash && (
-                <div style={{
-                    marginBottom: '20px', padding: '12px 16px', borderRadius: '10px',
-                    background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)',
-                    color: '#34d399', fontSize: '14px', display: 'flex', justifyContent: 'space-between',
-                }}>
+                <div style={{ marginBottom: '20px', padding: '12px 16px', borderRadius: '10px', background: t.successBg, border: `1px solid ${t.successBorder}`, color: t.success, fontSize: '14px', display: 'flex', justifyContent: 'space-between' }}>
                     <span>✓ {flash}</span>
-                    <button onClick={() => setFlash(null)} style={{ background: 'none', border: 'none', color: '#34d399', cursor: 'pointer' }}>✕</button>
+                    <button onClick={() => setFlash(null)} style={{ background: 'none', border: 'none', color: t.success, cursor: 'pointer' }}>✕</button>
                 </div>
             )}
 
-            {/* General error */}
             {errors.general && (
-                <div style={{ marginBottom: '20px', padding: '12px 16px', borderRadius: '10px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', fontSize: '14px' }}>
+                <div style={{ marginBottom: '20px', padding: '12px 16px', borderRadius: '10px', background: t.dangerBg, border: `1px solid ${t.danger}44`, color: t.danger, fontSize: '14px' }}>
                     {errors.general}
                 </div>
             )}
 
             {/* Create form */}
             {showForm && (
-                <div style={{ marginBottom: '28px', padding: '24px', borderRadius: '16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <div style={{ marginBottom: '28px', padding: '24px', borderRadius: '16px', background: t.surface, border: `1px solid ${t.border}` }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
-                        <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#a78bfa', margin: 0 }}>New Post</h2>
-                        <span style={{ fontSize: '11px', color: '#475569', background: 'rgba(139,92,246,0.1)', padding: '2px 8px', borderRadius: '20px', border: '1px solid rgba(139,92,246,0.2)' }}>
+                        <h2 style={{ fontSize: '15px', fontWeight: 600, color: t.accent, margin: 0 }}>New Post</h2>
+                        <span style={{ fontSize: '11px', color: t.textFaint, background: t.accentBg, padding: '2px 8px', borderRadius: '20px', border: `1px solid ${t.accentBorder}` }}>
                             POST /api/posts
                         </span>
                     </div>
@@ -186,31 +183,31 @@ export default function Index() {
 
             {/* Posts list */}
             {loading ? (
-                <div style={{ textAlign: 'center', padding: '60px 0', color: '#475569' }}>
-                    <div style={{ fontSize: '32px', marginBottom: '12px', animation: 'spin 1s linear infinite' }}>⏳</div>
+                <div style={{ textAlign: 'center', padding: '60px 0', color: t.textFaint }}>
+                    <div style={{ fontSize: '32px', marginBottom: '12px' }}>⏳</div>
                     <p style={{ fontSize: '14px' }}>Loading posts from API...</p>
                 </div>
             ) : posts.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '80px 0' }}>
                     <div style={{ fontSize: '48px', marginBottom: '12px' }}>📝</div>
-                    <p style={{ fontSize: '16px', fontWeight: 500, color: '#64748b' }}>No posts yet</p>
-                    <p style={{ fontSize: '13px', color: '#475569', marginTop: '4px' }}>Click "+ New Post" to create your first MongoDB document via the API.</p>
+                    <p style={{ fontSize: '16px', fontWeight: 500, color: t.textMuted }}>No posts yet</p>
+                    <p style={{ fontSize: '13px', color: t.textFaint, marginTop: '4px' }}>Click "+ New Post" to create your first MongoDB document via the API.</p>
                 </div>
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {posts.map(p => (
-                        <article key={p.id} style={{ padding: '20px 24px', borderRadius: '14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                        <article key={p.id} style={{ padding: '20px 24px', borderRadius: '14px', background: t.surface, border: `1px solid ${t.border}`, display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                             <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                                    <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>{p.title}</h3>
-                                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '20px', background: 'rgba(139,92,246,0.2)', color: '#a78bfa', fontFamily: 'monospace', border: '1px solid rgba(139,92,246,0.3)' }}>
+                                    <h3 style={{ fontSize: '15px', fontWeight: 600, color: t.text, margin: 0 }}>{p.title}</h3>
+                                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '20px', background: t.accentBg, color: t.accent, fontFamily: 'monospace', border: `1px solid ${t.accentBorder}` }}>
                                         {p.id.slice(-8)}
                                     </span>
                                 </div>
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                                <div style={{ fontSize: '12px', color: t.textMuted, marginTop: '4px' }}>
                                     ✍️ {p.author} &nbsp;·&nbsp; {new Date(p.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                                 </div>
-                                <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: '8px', lineHeight: 1.6, marginBottom: 0, WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', display: '-webkit-box' }}>
+                                <p style={{ fontSize: '13px', color: t.textFaint, marginTop: '8px', lineHeight: 1.6, marginBottom: 0, WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', display: '-webkit-box' }}>
                                     {p.content}
                                 </p>
                             </div>
