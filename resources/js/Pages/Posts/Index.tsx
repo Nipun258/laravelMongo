@@ -1,180 +1,229 @@
-import { FormEventHandler, useState } from 'react';
-import { Head, useForm, router } from '@inertiajs/react';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { Head } from '@inertiajs/react';
+import { useEffect, useState, FormEvent } from 'react';
 
 interface Post {
-    _id: string;
+    id: string;
     title: string;
     content: string;
     author: string;
     created_at: string;
 }
 
-interface Props {
-    posts: Post[];
-    flash?: { success?: string };
+interface FormData {
+    title: string;
+    content: string;
+    author: string;
 }
 
-export default function Index({ posts, flash }: Props) {
-    const { data, setData, post, processing, errors, reset } = useForm({
-        title: '',
-        content: '',
-        author: '',
-    });
+interface FormErrors {
+    title?: string;
+    content?: string;
+    author?: string;
+    general?: string;
+}
 
+export default function Index() {
+    const [posts, setPosts] = useState<Post[]>([]);
+    const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
+    const [processing, setProcessing] = useState(false);
+    const [flash, setFlash] = useState<string | null>(null);
+    const [errors, setErrors] = useState<FormErrors>({});
+    const [form, setForm] = useState<FormData>({ title: '', content: '', author: '' });
 
-    const submit: FormEventHandler = (e) => {
-        e.preventDefault();
-        post(route('posts.store'), {
-            onSuccess: () => {
-                reset();
-                setShowForm(false);
-            },
-        });
-    };
-
-    const deletePost = (id: string) => {
-        if (confirm('Delete this post?')) {
-            router.delete(route('posts.destroy', id));
+    // ── Fetch posts from GET /api/posts ──
+    const fetchPosts = async () => {
+        setLoading(true);
+        try {
+            // Ensure Sanctum CSRF cookie is set before any API call
+            await window.axios.get('/sanctum/csrf-cookie');
+            const res = await window.axios.get('/api/posts');
+            setPosts(res.data.data);
+        } catch (err: any) {
+            if (err.response?.status === 401) {
+                setErrors({ general: 'Session expired. Please refresh the page.' });
+            } else {
+                setErrors({ general: 'Failed to load posts from API.' });
+            }
+        } finally {
+            setLoading(false);
         }
     };
 
+    useEffect(() => { fetchPosts(); }, []);
+
+    // ── Create post via POST /api/posts ──
+    const handleSubmit = async (e: FormEvent) => {
+        e.preventDefault();
+        setProcessing(true);
+        setErrors({});
+        try {
+            await window.axios.post('/api/posts', form);
+            setForm({ title: '', content: '', author: '' });
+            setShowForm(false);
+            setFlash('Post created successfully!');
+            fetchPosts();
+        } catch (err: any) {
+            if (err.response?.status === 422) {
+                // Laravel validation errors
+                const ve = err.response.data.errors as Record<string, string[]>;
+                setErrors({
+                    title: ve.title?.[0],
+                    content: ve.content?.[0],
+                    author: ve.author?.[0],
+                });
+            } else {
+                setErrors({ general: 'Failed to create post. Please try again.' });
+            }
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    // ── Delete post via DELETE /api/posts/{id} ──
+    const deletePost = async (id: string) => {
+        if (!confirm('Delete this post?')) return;
+        try {
+            await window.axios.delete(`/api/posts/${id}`);
+            setFlash('Post deleted.');
+            setPosts(prev => prev.filter(p => p.id !== id));
+        } catch {
+            setFlash('Failed to delete post.');
+        }
+    };
+
+    const setField = (field: keyof FormData, val: string) =>
+        setForm(prev => ({ ...prev, [field]: val }));
+
+    const inputStyle = (hasError?: string) => ({
+        width: '100%', padding: '10px 14px', borderRadius: '8px', boxSizing: 'border-box' as const,
+        background: 'rgba(255,255,255,0.06)',
+        border: hasError ? '1px solid #f87171' : '1px solid rgba(255,255,255,0.1)',
+        color: '#e2e8f0', fontSize: '13px', outline: 'none',
+    });
+
     return (
-        <>
+        <AuthenticatedLayout header={<span style={{ fontSize: '14px', color: '#64748b' }}>Home / Posts</span>}>
             <Head title="Posts" />
 
-            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 text-white">
-                {/* Header */}
-                <header className="border-b border-white/10 bg-white/5 backdrop-blur-md sticky top-0 z-10">
-                    <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="text-2xl">🍃</span>
-                            <div>
-                                <h1 className="text-xl font-bold tracking-tight">Laravel + MongoDB</h1>
-                                <p className="text-xs text-purple-300">React · Inertia.js · MongoDB</p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => setShowForm(!showForm)}
-                            className="px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 transition-all text-sm font-semibold shadow-lg shadow-purple-900/40"
-                        >
-                            {showForm ? '✕ Cancel' : '+ New Post'}
-                        </button>
-                    </div>
-                </header>
-
-                <main className="max-w-5xl mx-auto px-6 py-10">
-                    {/* Flash message */}
-                    {flash?.success && (
-                        <div className="mb-6 px-4 py-3 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-sm">
-                            ✓ {flash.success}
-                        </div>
-                    )}
-
-                    {/* Create Post Form */}
-                    {showForm && (
-                        <div className="mb-10 p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm shadow-2xl">
-                            <h2 className="text-lg font-semibold mb-5 text-purple-200">Create New Post</h2>
-                            <form onSubmit={submit} className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Title</label>
-                                    <input
-                                        type="text"
-                                        value={data.title}
-                                        onChange={e => setData('title', e.target.value)}
-                                        className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/10 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 text-sm placeholder:text-slate-500"
-                                        placeholder="Post title..."
-                                    />
-                                    {errors.title && <p className="mt-1 text-xs text-red-400">{errors.title}</p>}
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Author</label>
-                                    <input
-                                        type="text"
-                                        value={data.author}
-                                        onChange={e => setData('author', e.target.value)}
-                                        className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/10 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 text-sm placeholder:text-slate-500"
-                                        placeholder="Author name..."
-                                    />
-                                    {errors.author && <p className="mt-1 text-xs text-red-400">{errors.author}</p>}
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-400 mb-1">Content</label>
-                                    <textarea
-                                        value={data.content}
-                                        onChange={e => setData('content', e.target.value)}
-                                        rows={4}
-                                        className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/10 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500 text-sm placeholder:text-slate-500 resize-none"
-                                        placeholder="Write your post content..."
-                                    />
-                                    {errors.content && <p className="mt-1 text-xs text-red-400">{errors.content}</p>}
-                                </div>
-                                <div className="flex justify-end gap-3 pt-1">
-                                    <button
-                                        type="submit"
-                                        disabled={processing}
-                                        className="px-5 py-2 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 transition-all text-sm font-semibold"
-                                    >
-                                        {processing ? 'Publishing...' : 'Publish Post'}
-                                    </button>
-                                </div>
-                            </form>
-                        </div>
-                    )}
-
-                    {/* Posts List */}
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-2xl font-bold">Posts
-                                <span className="ml-2 text-sm font-normal text-slate-400">({posts.length})</span>
-                            </h2>
-                        </div>
-
-                        {posts.length === 0 ? (
-                            <div className="text-center py-20 text-slate-500">
-                                <div className="text-5xl mb-4">📝</div>
-                                <p className="text-lg font-medium">No posts yet</p>
-                                <p className="text-sm mt-1">Click "New Post" to create your first MongoDB document.</p>
-                            </div>
-                        ) : (
-                            posts.map(post => (
-                                <article
-                                    key={post._id}
-                                    className="group p-6 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm hover:border-purple-500/40 hover:bg-white/8 transition-all duration-300"
-                                >
-                                    <div className="flex items-start justify-between gap-4">
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="text-lg font-semibold text-white group-hover:text-purple-200 transition-colors truncate">
-                                                {post.title}
-                                            </h3>
-                                            <div className="flex items-center gap-2 mt-1 text-xs text-slate-400">
-                                                <span>✍️ {post.author}</span>
-                                                <span>·</span>
-                                                <span>{new Date(post.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                                                <span className="ml-1 px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300 font-mono text-[10px]">
-                                                    _id: {post._id.slice(-8)}
-                                                </span>
-                                            </div>
-                                            <p className="mt-3 text-sm text-slate-300 leading-relaxed line-clamp-3">
-                                                {post.content}
-                                            </p>
-                                        </div>
-                                        <button
-                                            onClick={() => deletePost(post._id)}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 p-2 rounded-lg hover:bg-red-500/20 text-slate-500 hover:text-red-400"
-                                            title="Delete post"
-                                        >
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
-                                            </svg>
-                                        </button>
-                                    </div>
-                                </article>
-                            ))
-                        )}
-                    </div>
-                </main>
+            {/* Page heading */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '28px' }}>
+                <div>
+                    <h1 style={{ fontSize: '22px', fontWeight: 700, color: '#f1f5f9', margin: 0 }}>Posts</h1>
+                    <p style={{ color: '#64748b', fontSize: '13px', marginTop: '4px' }}>
+                        API: <code style={{ color: '#a78bfa' }}>/api/posts</code> · MongoDB collection · {posts.length} document{posts.length !== 1 ? 's' : ''}
+                    </p>
+                </div>
+                <button
+                    onClick={() => { setShowForm(!showForm); setErrors({}); }}
+                    style={{
+                        padding: '10px 18px', borderRadius: '10px', border: 'none', color: '#fff', cursor: 'pointer',
+                        fontSize: '13px', fontWeight: 600,
+                        background: showForm ? 'rgba(255,255,255,0.08)' : 'linear-gradient(135deg,#7c3aed,#4f46e5)',
+                        boxShadow: showForm ? 'none' : '0 4px 15px rgba(124,58,237,0.4)',
+                    }}
+                >
+                    {showForm ? '✕ Cancel' : '+ New Post'}
+                </button>
             </div>
-        </>
+
+            {/* Flash message */}
+            {flash && (
+                <div style={{
+                    marginBottom: '20px', padding: '12px 16px', borderRadius: '10px',
+                    background: 'rgba(52,211,153,0.12)', border: '1px solid rgba(52,211,153,0.3)',
+                    color: '#34d399', fontSize: '14px', display: 'flex', justifyContent: 'space-between',
+                }}>
+                    <span>✓ {flash}</span>
+                    <button onClick={() => setFlash(null)} style={{ background: 'none', border: 'none', color: '#34d399', cursor: 'pointer' }}>✕</button>
+                </div>
+            )}
+
+            {/* General error */}
+            {errors.general && (
+                <div style={{ marginBottom: '20px', padding: '12px 16px', borderRadius: '10px', background: 'rgba(248,113,113,0.12)', border: '1px solid rgba(248,113,113,0.3)', color: '#f87171', fontSize: '14px' }}>
+                    {errors.general}
+                </div>
+            )}
+
+            {/* Create form */}
+            {showForm && (
+                <div style={{ marginBottom: '28px', padding: '24px', borderRadius: '16px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px' }}>
+                        <h2 style={{ fontSize: '15px', fontWeight: 600, color: '#a78bfa', margin: 0 }}>New Post</h2>
+                        <span style={{ fontSize: '11px', color: '#475569', background: 'rgba(139,92,246,0.1)', padding: '2px 8px', borderRadius: '20px', border: '1px solid rgba(139,92,246,0.2)' }}>
+                            POST /api/posts
+                        </span>
+                    </div>
+                    <form onSubmit={handleSubmit}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '6px' }}>Title *</label>
+                                <input type="text" value={form.title} onChange={e => setField('title', e.target.value)} placeholder="Post title..." style={inputStyle(errors.title)} />
+                                {errors.title && <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#f87171' }}>{errors.title}</p>}
+                            </div>
+                            <div>
+                                <label style={{ display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '6px' }}>Author *</label>
+                                <input type="text" value={form.author} onChange={e => setField('author', e.target.value)} placeholder="Author name..." style={inputStyle(errors.author)} />
+                                {errors.author && <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#f87171' }}>{errors.author}</p>}
+                            </div>
+                        </div>
+                        <div style={{ marginBottom: '18px' }}>
+                            <label style={{ display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '6px' }}>Content *</label>
+                            <textarea value={form.content} onChange={e => setField('content', e.target.value)} rows={4} placeholder="Write your post content..." style={{ ...inputStyle(errors.content), resize: 'vertical' }} />
+                            {errors.content && <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#f87171' }}>{errors.content}</p>}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <button type="submit" disabled={processing}
+                                style={{ padding: '10px 24px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: processing ? 0.6 : 1 }}>
+                                {processing ? 'Publishing...' : 'Publish Post'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {/* Posts list */}
+            {loading ? (
+                <div style={{ textAlign: 'center', padding: '60px 0', color: '#475569' }}>
+                    <div style={{ fontSize: '32px', marginBottom: '12px', animation: 'spin 1s linear infinite' }}>⏳</div>
+                    <p style={{ fontSize: '14px' }}>Loading posts from API...</p>
+                </div>
+            ) : posts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '80px 0' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '12px' }}>📝</div>
+                    <p style={{ fontSize: '16px', fontWeight: 500, color: '#64748b' }}>No posts yet</p>
+                    <p style={{ fontSize: '13px', color: '#475569', marginTop: '4px' }}>Click "+ New Post" to create your first MongoDB document via the API.</p>
+                </div>
+            ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {posts.map(p => (
+                        <article key={p.id} style={{ padding: '20px 24px', borderRadius: '14px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                                    <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#f1f5f9', margin: 0 }}>{p.title}</h3>
+                                    <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '20px', background: 'rgba(139,92,246,0.2)', color: '#a78bfa', fontFamily: 'monospace', border: '1px solid rgba(139,92,246,0.3)' }}>
+                                        {p.id.slice(-8)}
+                                    </span>
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                                    ✍️ {p.author} &nbsp;·&nbsp; {new Date(p.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                                </div>
+                                <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: '8px', lineHeight: 1.6, marginBottom: 0, WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', display: '-webkit-box' }}>
+                                    {p.content}
+                                </p>
+                            </div>
+                            <button onClick={() => deletePost(p.id)} title="Delete post"
+                                style={{ flexShrink: 0, padding: '8px', borderRadius: '8px', border: 'none', background: 'rgba(248,113,113,0.1)', color: '#f87171', cursor: 'pointer' }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" style={{ width: 16, height: 16 }} viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+                        </article>
+                    ))}
+                </div>
+            )}
+        </AuthenticatedLayout>
     );
 }
